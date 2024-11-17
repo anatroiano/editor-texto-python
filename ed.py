@@ -13,7 +13,9 @@ TOKENS = {
     'IDENTIFIER': r'\b[a-zA-Z_][a-zA-Z0-9_]*\b',  # Identificadores de variáveis.
     'OPERATOR': r'[+\-*/]',       # Operadores matemáticos.
     'COMPARISON': r'[><=]+',       # Operadores de comparação.
-    'STRING': r'"[^"]*"|\'[^\']*\''
+    'STRING': r'"[^"]*"|\'[^\']*\'',
+    'SEPARATOR': r';',  
+    'START': r':'
 }
 
 # Função lexer: converte o código do usuário em uma lista de tokens para serem processados pelo parser.
@@ -38,10 +40,10 @@ def lexer(code):
 
 # Classe Parser: analisa e executa os tokens gerados pelo lexer.
 class Parser:
-    def __init__(self, tokens):
+    def __init__(self, tokens, position = 0, variables = {}):
         self.tokens = tokens      # Lista de tokens para processar.
-        self.position = 0         # Posição atual no array de tokens.
-        self.variables = {}       # Dicionário para armazenar variáveis e seus valores.
+        self.position = position         # Posição atual no array de tokens.
+        self.variables = variables       # Dicionário para armazenar variáveis e seus valores.
 
     def parse(self):
         # Itera através dos tokens, identificando e processando comandos.
@@ -57,6 +59,8 @@ class Parser:
                 self.parse_end()
             elif token_type == 'STRING':
                 self.parse_string()
+            elif token_type == 'FOR':
+                self.parse_for()
             else:
                 # Erro para comandos não reconhecidos.
                 raise SyntaxError(f"Comando inválido: {value}")
@@ -66,7 +70,7 @@ class Parser:
         self.position += 1
         return string_value
 
-    def parse_let(self):
+    def parse_let(self, returnValue = False):
         # Processa uma declaração de variável.
         self.position += 1
         var_name = self.tokens[self.position][1]  # Nome da variável.
@@ -76,6 +80,8 @@ class Parser:
             raise SyntaxError("Erro de sintaxe em declaração de variável")
         self.position += 1
         value = self.evaluate_expression()  # Avalia a expressão à direita do '='.
+        if returnValue:
+            return {var_name : value}
         self.variables[var_name] = value    # Armazena o valor da variável.
 
     def parse_print(self):
@@ -98,21 +104,60 @@ class Parser:
                 self.position += 1
                 self.parse()  # Executa o bloco 'else' se encontrado.
 
+    def parse_for(self):
+        accumulator = self.parse_let(True)
+        if self.tokens[self.position][0] != 'SEPARATOR':
+            raise SyntaxError("Erro de sintaxe em declaração do for, falta de ;")
+        self.position += 1
+
+        startPositionOfValidation = self.position
+        state = self.evaluate_condition(accumulator)
+        if not state:
+            raise SyntaxError("Erro de sintaxe em declaração do for, validação falsa")
+        if self.tokens[self.position][0] != 'SEPARATOR':
+            raise SyntaxError("Erro de sintaxe em declaração do for, falta de ;")
+        self.position += 1
+
+        if self.tokens[self.position][1] in accumulator:
+            self.position += 1
+            if self.tokens[self.position][0] == 'COMPARISON':
+                self.position += 1
+                PositionOfUpdateAccumulator = self.position
+                # newValue = self.evaluate_expression(accumulator)
+        else:
+            raise SyntaxError("Erro de sintaxe em declaração do for, erro no incremento")
+        
+        if self.tokens[self.position][0] == 'START':
+            initialPositionOfLoop = self.position
+        else:
+            raise SyntaxError("Erro de sintaxe em declaração do for")
+        
+        finishPositionOfLoop = next((i for i, t in enumerate(self.tokens) if t[0] == 'END'), None)
+        if finishPositionOfLoop is None: 
+            finishPositionOfLoop = len(self.position)
+        self.position = startPositionOfValidation
+        while self.evaluate_condition(accumulator):
+            Parser(self.tokens[initialPositionOfLoop + 1: finishPositionOfLoop], 0, accumulator).parse()
+            self.position = PositionOfUpdateAccumulator
+            accumulator[self.tokens[startPositionOfValidation][1]] = self.evaluate_expression(accumulator)
+            self.position = startPositionOfValidation
+        self.position = finishPositionOfLoop
+
     def parse_end(self): 
         self.position += 1 # Quando o end é encontrado, passa para o próximo token 
 
-    def evaluate_expression(self):
+    def evaluate_expression(self, localVariables = None):
         # Avalia uma expressão matemática.
-        left_value = self.get_term()  # Pega o primeiro termo.
+        left_value = self.get_term(localVariables)  # Pega o primeiro termo.
         # Processa operadores matemáticos.
         while self.position < len(self.tokens) and self.tokens[self.position][0] == 'OPERATOR':
             operator = self.tokens[self.position][1]
             self.position += 1
-            right_value = self.get_term()  # Pega o próximo termo.
+            right_value = self.get_term(localVariables)  # Pega o próximo termo.
             left_value = self.apply_operator(left_value, operator, right_value)  # Aplica o operador entre os termos.
         return left_value
 
-    def get_term(self):
+    def get_term(self, localVariables = None):
         # Retorna o valor de um termo (número ou variável).
         token_type, value = self.tokens[self.position]
         if token_type == 'NUMBER':
@@ -123,6 +168,8 @@ class Parser:
             # Retorna o valor da variável, se existir.
             if value in self.variables:
                 return self.variables[value]
+            if localVariables is not None and value in localVariables:
+                return localVariables[value]
             else:
                 # Erro caso a variável não esteja definida.
                 raise NameError(f"Variável não definida: {value}")
@@ -133,12 +180,12 @@ class Parser:
             # Erro para termos inválidos.
             raise SyntaxError(f"Expressão inválida: {value}")
 
-    def evaluate_condition(self):
+    def evaluate_condition(self, localVariables = None):
         # Avalia uma condição (comparação entre expressões).
-        left = self.evaluate_expression()  # Avalia a expressão à esquerda.
+        left = self.evaluate_expression(localVariables)  # Avalia a expressão à esquerda.
         operator = self.tokens[self.position][1]
         self.position += 1
-        right = self.evaluate_expression()  # Avalia a expressão à direita.
+        right = self.evaluate_expression(localVariables)  # Avalia a expressão à direita.
         return self.apply_operator(left, operator, right)
 
     def apply_operator(self, left, operator, right):
