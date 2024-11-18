@@ -123,7 +123,7 @@ class Parser:
             if self.tokens[self.position][0] == 'COMPARISON':
                 self.position += 1
                 PositionOfUpdateAccumulator = self.position
-                # newValue = self.evaluate_expression(accumulator)
+                newValue = self.evaluate_expression(accumulator)
         else:
             raise SyntaxError("Erro de sintaxe em declaração do for, erro no incremento")
         
