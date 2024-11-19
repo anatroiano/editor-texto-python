@@ -45,7 +45,7 @@ class Parser:
         self.position = position         # Posição atual no array de tokens.
         self.variables = variables       # Dicionário para armazenar variáveis e seus valores.
 
-    def parse(self):
+    def parse(self, condition = False):
         # Itera através dos tokens, identificando e processando comandos.
         while self.position < len(self.tokens):
             token_type, value = self.tokens[self.position]
@@ -61,6 +61,9 @@ class Parser:
                 self.parse_string()
             elif token_type == 'FOR':
                 self.parse_for()
+            elif token_type == 'ELSE':
+                if not condition:
+                    self.position += 1
             else:
                 # Erro para comandos não reconhecidos.
                 raise SyntaxError(f"Comando inválido: {value}")
@@ -95,7 +98,8 @@ class Parser:
         self.position += 1
         condition = self.evaluate_condition()  # Avalia a condição do 'if'.
         if condition:
-            self.parse()  # Executa o bloco 'if' se a condição for verdadeira.
+            # Se a condição for verdadeira, executa o bloco 'if'.
+            self.parse(condition)
         else:
             # Pula o bloco 'if' até encontrar 'else' ou 'end'.
             while self.tokens[self.position][0] != 'ELSE' and self.tokens[self.position][0] != 'END':
