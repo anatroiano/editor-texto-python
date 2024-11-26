@@ -12,12 +12,10 @@ TOKENS = {
     'NUMBER': r'\b\d+\b',         # Números inteiros.
     'IDENTIFIER': r'\b[a-zA-Z_][a-zA-Z0-9_]*\b',  # Identificadores de variáveis.
     'OPERATOR': r'[+\-*/]',       # Operadores matemáticos.
-    'COMPARISON': r'[><=]+',       # Operadores de comparação.
+    'COMPARISON': r'[><=]+|&&|\|\|', # Operadores de comparação.
     'STRING': r'"[^"]*"|\'[^\']*\'',
     'SEPARATOR': r';',  
     'START': r':',
-    'AND': r'\&\&',  # Operador lógico AND (&&)
-    'OR': r'\|\|',   # Operador lógico OR (||)
 }
 
 # Função lexer: converte o código do usuário em uma lista de tokens para serem processados pelo parser.
@@ -69,10 +67,6 @@ class Parser:
             elif token_type == 'ELSE':
                 if not condition:
                     self.position += 1
-            elif token_type == 'AND':
-                self.position += 1
-            elif token_type == 'OR':
-                self.position += 1
             else:
                 # Erro para comandos não reconhecidos.
                 raise SyntaxError(f"Comando inválido: {value}")
@@ -158,14 +152,12 @@ class Parser:
 
     def parse_end(self): 
         self.position += 1 # Quando o end é encontrado, passa para o próximo token 
- 
         
-
     def evaluate_expression(self, localVariables = None):
         # Avalia uma expressão matemática.
         left_value = self.get_term(localVariables)  # Pega o primeiro termo.
         # Processa operadores matemáticos.
-        while self.position < len(self.tokens) and (self.tokens[self.position][0] == 'OPERATOR' or self.tokens[self.position][0] == 'OR' or self.tokens[self.position][0] == 'COMPARISON'):
+        while self.position < len(self.tokens) and (self.tokens[self.position][0] == 'OPERATOR'):
             operator = self.tokens[self.position][1]
             self.position += 1
             right_value = self.get_term(localVariables)  # Pega o próximo termo.
@@ -196,22 +188,12 @@ class Parser:
             raise SyntaxError(f"Expressão inválida: {value}")
 
     def evaluate_condition(self, localVariables = None):
-    # Avalia uma condição (comparação entre expressões).
-    left = self.evaluate_expression(localVariables)  # Avalia a expressão à esquerda.
-    operator = self.tokens[self.position][1]
-    self.position += 1
-    right = self.evaluate_expression(localVariables)  # Avalia a expressão à direita.
-
-    # Processa operadores lógicos
-    while self.position < len(self.tokens) and self.tokens[self.position][0] in ['AND', 'OR']:
-        logical_operator = self.tokens[self.position][1]  # Agora corretamente definimos a variável logical_operator
-        self.position += 1  # Avança para o próximo token
-        right = self.evaluate_expression(localVariables)  # Avalia a expressão à direita
-        if logical_operator == '&&':
-            left = left and right
-        elif logical_operator == '||':
-            left = left or right
-    return left
+        # Avalia uma condição (comparação entre expressões).
+        left = self.evaluate_expression(localVariables)  # Avalia a expressão à esquerda.
+        operator = self.tokens[self.position][1]
+        self.position += 1
+        right = self.evaluate_expression(localVariables)  # Avalia a expressão à direita.
+        return self.apply_operator(left, operator, right)
 
     def apply_operator(self, left, operator, right):
         # Aplica o operador aritmético ou comparativo.
@@ -229,10 +211,6 @@ class Parser:
             return left < right
         elif operator == '==':
             return left == right
-        elif operator == '&&':
-            return left and right  # Aplica o operador AND
-        elif operator == '||':
-            return left or right  # Aplica o operador OR
         else:
             # Erro para operadores não reconhecidos.
             raise SyntaxError(f"Operador desconhecido: {operator}")
@@ -256,12 +234,12 @@ def execute_user_code():
                 print(f"Erro: {erro_msg}")
                 # Exibe a última linha com erro para facilitar a correção.
                 linha_erro = len(code_lines)
-                print(f"Erro na linha {linha_erro}: {code_lines[linha_erro-1]}")
+                print(f"Erro na linha {linha_erro-1}: {code_lines[linha_erro-2]}")
                 # Permite ao usuário corrigir a linha com erro.
                 corrigir = input("Deseja corrigir a linha? (s/n): ").strip().lower()
                 if corrigir == 's':
                     nova_linha = input("Digite a linha corrigida: ")
-                    code_lines[linha_erro-1] = nova_linha  # Atualiza a linha corrigida.
+                    code_lines[linha_erro-2] = nova_linha  # Atualiza a linha corrigida.
         else:
             # Adiciona a linha ao código.
             code_lines.append(line)
