@@ -1,6 +1,6 @@
 # Editor de texto - Documentação
 
-## Olá mundo
+## Olá mundo (edição)
 O primeiro programa em qualquer linguagem é o clássico "Olá, Mundo". Em nossa projeto, ele tem a seguinte sintaxe: 
 
  `print "Olá, Mundo!"`
